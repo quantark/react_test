@@ -11,6 +11,7 @@ import {
     Text,
     TextInput,
     View,
+    Image,
     Button,
     FlatList,
     List,
@@ -39,13 +40,14 @@ export default class TestProject1 extends Component {
 
     updateUri(newUri) {
         this.setState({uri: newUri});
-        NativeModules.MyToastAndroid.show("New uri is: " + newUri, 0);
+        // NativeModules.MyToastAndroid.show("New uri is: " + newUri.uri, 0);
     }
 
     _getParent(uri) {
-        var parts = uri.split("\/");
-        parts.splice(-2, 2);
-        return parts.join("\/");
+        var parts = uri.uri.split("\/");
+        parts.splice(-1, 1);
+        uri.uri = parts.join("\/");
+        return uri;
     }
 
     _getFileName(uri) {
@@ -69,7 +71,7 @@ export default class TestProject1 extends Component {
     }
 
     _getRootFile() {
-        NativeModules.MyToastAndroid.getFilesList("", (list) => {
+        NativeModules.MyToastAndroid.getFilesMap("", (list) => {
             this.updateData(list);
         })
     }
@@ -79,17 +81,24 @@ export default class TestProject1 extends Component {
     }
 
     _goToFile(newUri) {
-        NativeModules.MyToastAndroid.getFilesList(newUri, (list) => {
-            if (typeof list !== 'undefined' && list.length > 0) {
-                this.updateData(list);
-                this.updateUri(newUri);
-            } else {
-
-            }
-        })
+        if (!newUri.directory) {
+            NativeModules.MyToastAndroid.open(
+                newUri.uri).then(() => {
+                console.log('success!!');
+            }, (e) => {
+                console.log('error!!');
+            });
+        } else {
+            NativeModules.MyToastAndroid.getFilesMap(newUri.uri, (list) => {
+                if (typeof list !== 'undefined' && list.length > 0) {
+                    this.updateData(list);
+                    this.updateUri(newUri);
+                }
+            })
+        }
     }
 
-    _getFileIconUri(){
+    _getFileIconUri() {
         NativeModules.MyToastAndroid.getFileIcon(newUri, (iconUri) => {
             return iconUri;
         })
@@ -107,7 +116,6 @@ export default class TestProject1 extends Component {
         return <SearchBar placeholder="Type Here..." lightTheme round/>;
     };
 
-
     _keyExtractor = (item, index) => item;
 
     render() {
@@ -116,20 +124,17 @@ export default class TestProject1 extends Component {
                 data={this.state.data}
                 renderItem={({item}) =>
                     <View>
-                        <Image
-                            source={require('./img/favicon.png')}
-                        />
-                        <Image
-                            style={{width: 50, height: 50}}
-                            source={{uri: this._getFileIconUri()}}
-                        />
+                        {/*<Image*/}
+                            {/*style={{width: 50, height: 50}}*/}
+                            {/*source={{uri: item.icon_uri}}*/}
+                        {/*/>*/}
                         <Text
                             style={styles.item}
                             onPress={(id) => {
                                 this._goToFile(item);
                                 //NativeModules.MyToastAndroid.show(this._getParent(item).toString(), 0);
                             }}
-                        >{item}</Text>
+                        >{item.uri}</Text>
                     </View>}
             />
         );
@@ -154,9 +159,9 @@ const styles = StyleSheet.create({
         marginBottom: 5,
     },
     item: {
-        padding: 10,
+        padding: 5,
         fontSize: 18,
-        height: 80,
+        height: 50,
     },
 });
 

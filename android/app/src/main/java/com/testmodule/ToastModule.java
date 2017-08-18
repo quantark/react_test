@@ -3,12 +3,17 @@ package com.testmodule;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ResolveInfo;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
+import android.support.v4.content.FileProvider;
 import android.text.TextUtils;
+import android.util.Log;
+import android.webkit.MimeTypeMap;
 import android.widget.Toast;
 
 import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -16,6 +21,8 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
+
+import org.json.JSONException;
 
 import java.io.File;
 import java.util.HashMap;
@@ -72,7 +79,7 @@ public class ToastModule extends ReactContextBaseJavaModule {
         } else {
             files = new File(currentUri).listFiles();
         }
-        WritableMap uris = getUriMap(files);
+        WritableArray uris = getUriMap(files);
         resultCallback.invoke(uris);
     }
 
@@ -87,19 +94,21 @@ public class ToastModule extends ReactContextBaseJavaModule {
         return uris;
     }
 
-    private WritableMap getUriMap(File[] files) {
-        WritableMap uris = new WritableNativeMap();
+    private WritableArray getUriMap(File[] files) {
+        WritableArray uris = new WritableNativeArray();
         if(files == null){
             return uris;
         }
         for (File file : files) {
+            WritableMap map = new WritableNativeMap();
             if(file.isDirectory()) {
-                uris.putString("icon_uri", getFolderIconUri());
+                map.putString("icon_uri", getFolderIconUri());
             } else {
-                uris.putString("icon_uri", getFileIconUri(file.getPath()));
+                map.putString("icon_uri", getFileIconUri(file.getPath()));
             }
-            uris.putBoolean("directory", file.isDirectory());
-            uris.putString("uri", file.getPath());
+            map.putBoolean("directory", file.isDirectory());
+            map.putString("uri", file.getPath());
+            uris.pushMap(map);
         }
         return uris;
     }
@@ -138,5 +147,53 @@ public class ToastModule extends ReactContextBaseJavaModule {
 
     private Uri getIconUri(ActivityInfo appInfo){
         return Uri.parse("android.resource://" + appInfo.packageName + "/" + appInfo.applicationInfo.icon);
+    }
+
+    @ReactMethod
+    public void open(String fileUriStr, Promise promise) throws JSONException {
+
+        String realUri = getRealUri(fileUriStr);
+        File file = new File(realUri);
+        if (file.exists()) {
+            try {
+//                Uri path = FileProvider.getUriForFile(getReactApplicationContext(), getReactApplicationContext().getPackageName() + ".fileprovider", file);
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+//                intent.setDataAndType(Uri.parse(realUri), getMimeType(realUri));
+                intent.setDataAndType(Uri.fromFile(file), getMimeType(realUri));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                getReactApplicationContext().startActivity(intent);
+
+                promise.resolve("Open success!!");
+            } catch (android.content.ActivityNotFoundException e) {
+                promise.reject("Open error!!");
+            }
+        } else {
+            promise.reject("File not found");
+        }
+    }
+
+    private String getRealUri(String contentUri){
+        Uri fileUri = Uri.parse(contentUri);
+        String filePath;
+        if (fileUri != null && "content".equals(fileUri.getScheme())) {
+            Cursor cursor = getReactApplicationContext().getContentResolver().query(fileUri, new String[] { android.provider.MediaStore.Images.ImageColumns.DATA }, null, null, null);
+            cursor.moveToFirst();
+            filePath = cursor.getString(0);
+            cursor.close();
+        } else {
+            filePath = fileUri.getPath();
+        }
+
+        return filePath;
+    }
+
+    private String getMimeType(String url) {
+        String type = null;
+        String extension = MimeTypeMap.getFileExtensionFromUrl(url);
+        if (extension != null) {
+            type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+        }
+        return type;
     }
 }
